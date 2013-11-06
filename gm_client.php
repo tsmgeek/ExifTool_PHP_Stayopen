@@ -6,14 +6,10 @@ $gmc = new GearmanClient();
 $gmc->addServer("127.0.0.1",4730);
 $gmc->setCompleteCallback("complete");
 
-$loops=10;
+$loops=100;
 for($i=1;$i<=$loops;$i++){
-    #$job[]="-g -j";
     $job=array();
-    $job[]='-use MWG';
-    $job[]="-g";
-    $job[]="-j";
-    $job[]="-*:*";
+    $job[]="-all:all";
     $job[]="/home/user/test".i.".jpg";
     $res=$gmc->addTask("dev-ExifTool", serialize($job), null, "iptc".$i);
 }
@@ -32,5 +28,5 @@ foreach($results as $id=>$result){
 function complete($task, $results){
     global $results;
     print "-";
-   $results[$task->unique()] = array("handle"=>$task->jobHandle(), "data"=>unserialize($task->data()));
+   $results[$task->unique()] = array("handle"=>$task->jobHandle(), "data"=>$task->data());
 }

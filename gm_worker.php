@@ -28,6 +28,6 @@ function exiftool($job){
     $exif = ExifToolBatch::getInstance('/usr/local/exif/exiftool');
     print "-";
     $exif->add($data);
-    $x=$exif->fetchAll();
-    return serialize($x);
+    $x=$exif->fetch();
+    return $x;
 }

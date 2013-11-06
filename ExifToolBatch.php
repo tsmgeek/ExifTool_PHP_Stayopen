@@ -3,27 +3,33 @@
 
 class ExifToolBatch {
 
+    const BUFF_SIZE = 4096;
+
     private $_exiftool = null;
+    private $_defexecargs = array('-use MWG');
     private $_defargs = array('-g','-j');
     private $_process=null;
     private $_pipes=null;
     private $_stack=array();
     private $_lastdata=array();
-    private $_seq=1;
+    private $_seq=0;
     private $_socket_get_mode = "fgets";
-    private $_debug=1;
+    private $_debug=0;
 
-    public static function getInstance($path){
+    public static function getInstance($path=null, $args=null){
         static $inst = null;
         if($inst == null){
-            $inst = new ExifToolBatch($path);
+            $inst = new ExifToolBatch($path, $args);
         }
         return $inst;
     }
 
-    public function __construct($path){
+    public function __construct($path=null,$args=null){
         if(isset($path)){
             $this->setExifToolPath($path);
+        }
+        if(isset($args)){
+            $this->setDefaultExecArgs($args);
         }
         return $this;
     }
@@ -41,6 +47,30 @@ class ExifToolBatch {
 	return $this;
     }
 
+    public function getExifToolPath(){
+        return $this->_exiftool;
+    }
+
+    public function setDefaultExecArgs($args){
+        if(!is_array($args)) $args=array($args);
+        $this->_defexecargs=$args;
+        return $this;
+    }
+
+    public function getDefaultExecArgs(){
+        return $this->_defexecargs;
+    }
+
+    public function setDefaultArgs($args){
+        if(!is_array($args)) $args=array($args);
+        $this->_defargs=$args;
+        return $this;
+    }
+
+    public function getDefaultArgs(){
+        return $this->_defargs;
+    }
+
     public function start(){
         $env = null;
         $cwd = ".";
@@ -54,9 +84,13 @@ class ExifToolBatch {
             throw new Exception('Exiftool path was not set');
         }
 
-        $this->_process = proc_open($this->_exiftool.' -stay_open True -@ -', $descriptorspec, $this->_pipes, $cwd, $env);
+        $this->_process = proc_open($this->_exiftool.' '.implode(' ',$this->_defexecargs).' -stay_open True -@ -', $descriptorspec, $this->_pipes, $cwd, $env);
 
-        stream_set_blocking ($this->_pipes[1],($this->_socket_get_mode=="fgets"?1:0));
+        if(substr($this->_socket_get_mode,0,6)=="stream"){
+            stream_set_blocking ($this->_pipes[1],0);
+        }else{
+            stream_set_blocking ($this->_pipes[1],1);
+        }
 
         if($this->test()){
             return $this->_process;
@@ -74,11 +108,17 @@ class ExifToolBatch {
         return true;
     }
 
+    private function run(){
+        $this->_seq = $this->_seq + 1;
+        $seq=$this->_seq;
+        fwrite($this->_pipes[0], "-execute".$seq."\n");
+        $output = $this->getStreamData();
+        return $output;
+    }
+
     public function test(){
         fwrite($this->_pipes[0], "-ver\n");
-        fwrite($this->_pipes[0], "-execute\n");
-
-        $output = $this->getStreamData("{ready}");
+        $output = $this->run();
         $output=floatval($output);
 
         if($output>=9.02){
@@ -101,26 +141,31 @@ class ExifToolBatch {
         }
     }
 
-    private function getStreamData($endDelim){
-        $endstr=$endDelim."\n";
+    private function getStreamData(){
+        $endstr="{ready".$this->_seq."}\n";
         $endstr_len=0-strlen($endstr);
         $output=false;
+        $endstr_found=null;
         switch($this->_socket_get_mode){
-            case "stream":
-            do{
-            $str=stream_get_line($this->_pipes[1],2048);
-            $last=substr($str,$endstr_len);
-            if($last==$endstr) $str = substr($str,0,$endstr_len);
-            $output=$output.$str;
-            }while($last != $endstr);
+            case "stream": // fast, high cpu
+                do{
+                    $str=stream_get_line($this->_pipes[1],self::BUFF_SIZE);
+                    $output=$output.$str;
+                }while(strpos($output,$endstr)===false);
+                $endstr_found=substr($output,$endstr_len);
+                $output=substr($output,0,$endstr_len);
                 break;
-            case "fgets":
-                while (($buffer = fgets($this->_pipes[1], 2048)) !== false) {
-                    $last=substr($buffer,$endstr_len);
-                    if($last == $endstr){ break; }
-                    $output=$output.$buffer;
-                }
+            case "fgets": // fast, low cpu
+                do{
+                    $str=fgets($this->_pipes[1], self::BUFF_SIZE);
+                    $output=$output.$str;
+                }while(strpos($str,$endstr)===false);
+                $endstr_found=substr($output,$endstr_len);
+                $output=substr($output,0,$endstr_len);
                 break;
+        }
+        if($endstr_found!=$endstr){
+            throw new Exception('ExifTool out of sequence');
         }
         return $output;
     }
@@ -141,12 +186,8 @@ class ExifToolBatch {
             fwrite($this->_pipes[0], $arg."\n");
         }
 
-        $seq = $this->_seq++;
-        fwrite($this->_pipes[0], "-execute".$seq."\n");
-
         // get all of the output
-        $output=false;
-        $output = $this->getStreamData("{ready".$seq."}");
+        $output = $this->run();
 
         return $output;
 
