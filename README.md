@@ -13,17 +13,22 @@ Note that script is hard coded to work with 9.03+ of ExifTool only because this 
 
 Let me know what you think or any changes to make it better.
 
+ExifTool Forum Related - http://u88.n24.queensu.ca/exiftool/forum/index.php/topic,5381.0.html
 
 Performance tests
 -
 These figures are to be taken as a guide of performance increase possible with supplied scripts but will vary depending on your hardware setup and arguments supplied to ExifTool.
 
-100 iterations fetching metadata from a JPEG (-use MWG -g -j -*:*)
+100 iterations fetching metadata from a JPEG (-use MWG -g -j -all:all)
+1 GM Instance - 1.3s
+2 GM Instances - 0.9s
+3 GM Instances - 0.7s
+4 GM Instances - 0.6s
 
-1 GM Instance - 52s
-2 GM Instances - 25s
-3 GM Instances - 17.5s
-4 GM Instances - 12.5s
+300 iterations with 4 GM Instances - 1.6s
+100 iterations 3 files on each iteration with 4 GM Instances - 1.4s
+50 iterations 6 files on each iteration with 4 GM Instances - 1.1s
+100 iterations 10 files on each iteration with 4 GM Instances - 3.1s
 
 Usage
 -
