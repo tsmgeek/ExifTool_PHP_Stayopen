@@ -71,6 +71,11 @@ class ExifToolBatch {
         return $this->_defargs;
     }
 
+    public function sigterm(){
+        $this->close();
+        exit;
+    }
+
     public function start(){
         $env = null;
         $cwd = ".";
@@ -83,6 +88,8 @@ class ExifToolBatch {
         if(is_null($this->_exiftool)){
             throw new Exception('Exiftool path was not set');
         }
+
+        pcntl_signal(SIGTERM,array(&$this,'sigterm'));
 
         $this->_process = proc_open($this->_exiftool.' '.implode(' ',$this->_defexecargs).' -stay_open True -@ -', $descriptorspec, $this->_pipes, $cwd, $env);
 
