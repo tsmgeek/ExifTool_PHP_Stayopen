@@ -107,7 +107,7 @@ class ExifToolBatch {
     }
 
     public function close(){
-    	fwrite($this->_pipes[0], "-stay_open\nFalse\n");
+        fwrite($this->_pipes[0], "-stay_open\nFalse\n");
         fclose($this->_pipes[0]);
         fclose($this->_pipes[1]);
         proc_terminate($this->_process);
