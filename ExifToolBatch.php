@@ -178,17 +178,19 @@ class ExifToolBatch {
         return $output;
     }
 
-    private function execute($args){
+    public function execute($args){
+        // merge default args with supplied args
+        $argsmerged=array_merge($this->_defargs,$args);
+        return $this->execute_cmd($argsmerged);
+    }
+
+    public function execute_args($args){
         $this->checkRunning();
 
         // $pipes now looks like this:
         // 0 => writeable handle connected to child stdin
         // 1 => readable handle connected to child stdout
         // Any error output will be appended to /tmp/error-output.txt
-        foreach($this->_defargs as $arg){
-            fwrite($this->_pipes[0], $arg."\n");
-        }
-
         foreach($args as $arg){
             if(!is_string($arg)) continue;
             fwrite($this->_pipes[0], $arg."\n");
@@ -198,8 +200,8 @@ class ExifToolBatch {
         $output = $this->run();
 
         return $output;
-
     }
+
 
     public function decode($data){
         if(is_array($data)){
