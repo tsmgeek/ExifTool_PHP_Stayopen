@@ -71,6 +71,12 @@ class ExifToolBatch {
         return $this->_defargs;
     }
 
+    public function setEchoMode($mode=1){
+        if(!is_int($mode)) return false;
+        $this->execute_cmd(array('-echo'.$mode));
+        return true;
+    }
+
     public function sigterm(){
         $this->close();
         exit;
