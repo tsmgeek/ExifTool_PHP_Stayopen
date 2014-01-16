@@ -8,6 +8,7 @@ class ExifToolBatch {
     private $_exiftool = null;
     private $_defexecargs = array('-use MWG');
     private $_defargs = array('-g','-j');
+    private $_quietmode = false;
     private $_process=null;
     private $_pipes=null;
     private $_stack=array();
@@ -15,6 +16,7 @@ class ExifToolBatch {
     private $_seq=0;
     private $_socket_get_mode = "fgets";
     private $_debug=0;
+    private $_exiftool_minver=9.15;
 
     public static function getInstance($path=null, $args=null){
         static $inst = null;
@@ -71,10 +73,10 @@ class ExifToolBatch {
         return $this->_defargs;
     }
 
-    public function setEchoMode($mode=1){
-        if(!is_int($mode)) return false;
-        $this->execute_cmd(array('-echo'.$mode));
-        return true;
+    public function setQuietMode($mode=false){
+        if(!is_bool($mode)) return false;
+        $this->_quietmode=$mode;
+        return $this;
     }
 
     public function sigterm(){
@@ -125,7 +127,15 @@ class ExifToolBatch {
     private function run(){
         $this->_seq = $this->_seq + 1;
         $seq=$this->_seq;
+
+        if($this->_quietmode===true){
+            fwrite($this->_pipes[0], "-q\n");
+            fwrite($this->_pipes[0], "-echo3\n");
+            fwrite($this->_pipes[0], "{ready".$seq."}\n");
+        }
+
         fwrite($this->_pipes[0], "-execute".$seq."\n");
+
         $output = $this->getStreamData();
         return $output;
     }
@@ -135,10 +145,10 @@ class ExifToolBatch {
         $output = $this->run();
         $output=floatval($output);
 
-        if($output>=9.02){
+        if($output>=$this->_exiftool_minver){
             return true;
         }else{
-            return false;
+            throw new Exception('Exiftool version ('.sprintf('%.02f',$output).') is lower than required ('.sprintf('%.02f',$this->_exiftool_minver).')');
         }
     }
 
@@ -187,7 +197,7 @@ class ExifToolBatch {
     public function execute($args){
         // merge default args with supplied args
         $argsmerged=array_merge($this->_defargs,$args);
-        return $this->execute_cmd($argsmerged);
+        return $this->execute_args($argsmerged);
     }
 
     public function execute_args($args){
@@ -207,6 +217,7 @@ class ExifToolBatch {
 
         return $output;
     }
+
 
 
     public function decode($data){
