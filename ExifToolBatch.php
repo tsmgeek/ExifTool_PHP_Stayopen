@@ -22,7 +22,7 @@ class ExifToolBatch {
     const SUMMARY_OUTPUT_FILES_APPENDED = "output files appended";
 
     private $_exiftool = null;
-    private $_defexecargs = array('-use WENNMWG');
+    private $_defexecargs = array('-use MWG');
     private $_defargs = array('-g','-j','-coordFormat','%.6f');
     private $_quietmode = false;
     private $_process=null;
@@ -40,7 +40,7 @@ class ExifToolBatch {
     public static function getInstance($path=null, $args=null){
         static $inst = null;
         if($inst == null){
-            $inst = new WN_ExifToolBatch($path, $args);
+            $inst = new ExifToolBatch($path, $args);
         }
         return $inst;
     }
