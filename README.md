@@ -13,7 +13,8 @@ Note that script is hard coded to work with 9.03+ of ExifTool only because this 
 
 Let me know what you think or any changes to make it better.
 
-ExifTool Forum Related - http://u88.n24.queensu.ca/exiftool/forum/index.php/topic,5381.0.html
+Phil Harvey's Exiftool  - http://www.sno.phy.queensu.ca/~phil/exiftool/
+Phil Harvey's Exiftool  (Forum Dev Post) - http://u88.n24.queensu.ca/exiftool/forum/index.php/topic,5381.0.html
 
 Performance tests
 -
