@@ -45,8 +45,11 @@ Put all your commands in an array and push it into the stack using the `$exif->a
 `clear()` clear the stack<br/>
 `fetch()` will return one processed item off the stack at a time.<br/>
 `fetchAll()` will return a single array with all items in the stack processed.<br/>
+`getError($id)` will return FALSE or STDERR output if there was an error, pass index if `fetchAll()` was used<br/>
+`getErrorStr($id)` will return STDERR output, pass index if `fetchAll()` was used<br/>
+`getSummary(msg)` will return summary value from msg passed which are defined as const's<br/>
 
-There are also calls to fetchDecoded/fetchAllDecoded which essentialy will decode the output in one step if your default arguments contains '-j' JSON output, the default for the script is ('-g','-j') to assist in this.
+There are also calls to `fetchDecoded()`/`fetchAllDecoded()` which essentialy will decode the output in one step if your default arguments contains '-j' JSON output, the default for the script is ('-g','-j') to assist in this.
 
 As you fetch items they are taken off the stack.
 
