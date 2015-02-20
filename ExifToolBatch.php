@@ -259,7 +259,7 @@ class ExifToolBatch {
 
     public function execute($args){
         // merge default args with supplied args
-        $argsmerged=array_merge($this->_defargs,$args);
+        $argsmerged=array_unique(array_merge($this->_defargs,$args));
         return $this->execute_args($argsmerged);
     }
 
