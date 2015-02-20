@@ -57,7 +57,7 @@ Examples
 ---
 Simple request to get all image metadata
 ```php
-$data=array('-g','-j','-*:*','test1.jpg');
+$data=array('-*:*','test1.jpg');
 $exif = ExifToolBatch::getInstance(/path/to/exiftool');
 $exif->add($data);
 $result=$exif->fetchAll();
