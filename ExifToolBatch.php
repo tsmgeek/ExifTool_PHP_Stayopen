@@ -670,6 +670,8 @@ class ExifToolBatch {
      * @return mixed Data/False
      */
     public function fetchDecoded($assoc=false){
+    	if(!in_array('-j', $this->_defargs))
+            throw new \ExifToolBatchException('Missing exiftool json argument');
         if(!$this->fetch()) return false;
         if(($data=json_decode($this->_lastdata,$assoc)) == TRUE){
             return $data;
@@ -715,6 +717,8 @@ class ExifToolBatch {
      * @return array All Data
      */
     public function fetchAllDecoded($assoc=false){
+    	if(!in_array('-j', $this->_defargs))
+            throw new \ExifToolBatchException('Missing exiftool json argument');
         if(!$this->fetchAll()) return false;
         $dataArr=array();
         foreach($this->_lastdata as $lastdata){
