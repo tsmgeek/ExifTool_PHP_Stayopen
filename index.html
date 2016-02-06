@@ -50,7 +50,7 @@ Note that script is hard coded to work with 9.03+ of ExifTool only because this 
 <h2>
 <a id="performance-tests" class="anchor" href="#performance-tests" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Performance tests</h2>
 
-<p>These figures are to be taken as a guide of performance increase possible with supplied scripts but will vary depending on your hardware setup and arguments supplied to ExifTool.</p>
+<p>These figures are to be taken as a guide of performance increase possible with supplied scripts but will vary depending on your hardware setup and arguments supplied to ExifTool (test system was running on ESXi/Opteron 2435/4vCPU/2G)</p>
 
 <p>100 iterations fetching metadata from a JPEG (-use MWG -g -j -all:all)<br>
 1 GM Instance - 1.3s<br>
@@ -71,17 +71,21 @@ Put all your commands in an array and push it into the stack using the <code>$ex
 
 <p><code>getInstance()</code> setup class as a singleton<br>
 <code>setExifToolPath($path)</code> set/change the path of ExifTool if not supplied at start<br>
+<code>setIdleTimeout($timeout)</code> idle seconds until ExifTool process is terminated<br> 
+<code>setProcessTimeout($timeout)</code> total ExifTool running seconds until process is terminated<br>
 <code>close()</code> terminate ExifTool background process<br>
 <code>start()</code> start ExifTool background process<br>
 <code>test()</code> to check if ExifTool is running.<br>
 <code>clear()</code> clear the stack<br>
 <code>fetch()</code> will return one processed item off the stack at a time.<br>
 <code>fetchAll()</code> will return a single array with all items in the stack processed.<br>
+<code>fetchDecoded($assoc)</code> will return one processed item off the stack at a time with JSON output decoded.<br>
+<code>fetchAllDecoded($assoc)</code> will return a single array with all items in the stack processed and JSON output decoded.<br>
+<code>fetchCallback($callback)</code> will return one processed item via user callback off the stack at a time .<br>
+<code>fetchAllCallback($callback)</code> will return a single array with all items in the stack processed after processing via user callback.<br>
 <code>getError($id)</code> will return FALSE or STDERR output if there was an error, pass index if <code>fetchAll()</code> was used<br>
 <code>getErrorStr($id)</code> will return STDERR output, pass index if <code>fetchAll()</code> was used<br>
 <code>getSummary(msg)</code> will return summary value from msg passed which are defined as const's<br></p>
-
-<p>There are also calls to <code>fetchDecoded()</code>/<code>fetchAllDecoded()</code> which essentialy will decode the output in one step if your default arguments contains '-j' JSON output, the default for the script is ('-g','-j') to assist in this.</p>
 
 <p>As you fetch items they are taken off the stack.</p>
 
