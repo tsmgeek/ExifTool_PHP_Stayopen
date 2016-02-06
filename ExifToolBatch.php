@@ -1,6 +1,11 @@
 <?php
 # vim: set smartindent tabstop=4 shiftwidth=4 set expandtab
 
+class ExifToolBatchProcessException extends ExifToolBatchException {
+}
+
+class ExifToolBatchException extends Exception {
+}
 
 class ExifToolBatch {
 
@@ -33,11 +38,17 @@ class ExifToolBatch {
     private $_seq=0;
     private $_socket_get_mode = "fgets";
     private $_socket_fgets_blocking = true;
+    private $_socket_get_timeout = 5;
     private $_debug=0;
-    private $_exitnow=false;
     private $_chlddied=false;
+    private $_running=true;
+    private $_processing=false;
     private $_maxretries=2;
     private $_exiftool_minver=9.15;
+    private $_pcntl_available = false;
+    private $_process_idle_timeout = 60;
+    private $_process_starttime = null;
+    private $_process_running_timeout = 3600;
 
     /**
      * Get static instance
@@ -63,16 +74,22 @@ class ExifToolBatch {
      */
     public function __construct($path=null,$args=null){
 
-        if(!extension_loaded('pcntl')){
-            throw new Exception('pcntl extension is not loaded');
+        if(extension_loaded('pcntl')){
+            $this->_pcntl_available = true;
+        }else{
+            trigger_error('pcntl extension is not loaded',E_USER_NOTICE);
         }
 
         if(isset($path)){
             $this->setExifToolPath($path);
         }
+        
         if(isset($args)){
             $this->setDefaultExecArgs($args);
         }
+        
+        $this->installSignals();
+        
         return $this;
     }
 
@@ -80,9 +97,10 @@ class ExifToolBatch {
      * Destructor
      */
     public function __destruct(){
+        $this->_running=false;
         $this->close();
     }
-
+    
     /**
      * Set exiftool path
      *
@@ -149,6 +167,32 @@ class ExifToolBatch {
     }
 
     /**
+     * Set process idle timeout
+     * @param int $timeout Timeout in seconds
+     * @return \ExifToolBatch
+     * @throws \ExifToolBatchException
+     */
+    public function setIdleTimeout($timeout){
+        if(!is_null($timeout) && !is_int($timeout))
+            throw new \ExifToolBatchException('Timeout has to be integer');
+        $this->_process_idle_timeout = $timeout;
+        return $this;
+    }
+    
+    /**
+     * Set total process runtime timeout
+     * @param int $timeout Timeout in seconds
+     * @return \ExifToolBatch
+     * @throws \ExifToolBatchException
+     */
+    public function setProcessTimeout($timeout){
+        if(!is_null($timeout) && !is_int($timeout))
+            throw new \ExifToolBatchException('Timeout has to be integer');
+        $this->_process_running_timeout = $timeout;
+        return $this;
+    }
+    
+    /**
      * Set exiftool quiet mode
      *
      * @param bool $mode Enable/Disable Quiet Model
@@ -160,22 +204,53 @@ class ExifToolBatch {
         return $this;
     }
 
-    /**
-     * SIGTERM
-     */
-    public function sigterm(){
-        $this->_exitnow=true;
-        $this->close();
+    public function signal($signo) {
+            switch ($signo) {
+            case SIGTERM:
+            case SIGINT:
+                    $this->_running=false;
+                    break;
+            case SIGHUP:
+            case SIGCHLD:
+                    if($this->_running===FALSE) break;
+                    $this->_chlddied=true;
+                    break;
+            case SIGTRAP:
+                    $e = new \ExifToolBatchException;
+                    file_put_contents(sys_get_temp_dir().'/pm_backtrace_'.getmypid(),
+                            $e->getTraceAsString());
+                    break;
+            case SIGALRM:
+                    if($this->_processing===FALSE)
+                        $this->close();
+                    break;
+            default:
+                    $this->getLogger()->error("No signal handler for $signo");
+                    break;
+            }
     }
-
+    
     /**
-     * SIGCHLD
+     * Install PCNTL Signals
      */
-    public function sigchld(){
-        $this->_chlddied=true;
-        $this->close();
+    private function installSignals(){
+        if(!$this->_pcntl_available) return;
+	pcntl_signal(SIGTERM, [$this,'signal']);
+        pcntl_signal(SIGINT,  [$this,'signal']);
+        pcntl_signal(SIGTRAP, [$this,'signal']);
+        pcntl_signal(SIGHUP,  [$this,'signal']);
+        pcntl_signal(SIGALRM,  [$this,'signal']);
     }
-
+    
+    /**
+     * Install idle timer
+     */
+    private function installIdleTimer(){
+        if(!$this->_pcntl_available) return;
+        if(is_null($this->_process_idle_timeout)) return;
+        pcntl_alarm($this->_process_idle_timeout);
+    }
+    
     /**
      * Start exiftool
      *
@@ -190,20 +265,22 @@ class ExifToolBatch {
             2 => array("pipe", "w")   // stderr is a pipe that the child will write to
         );
 
-        $this->_chlddied=false;
-        $this->_exitnow=false;
-
         if(is_null($this->_exiftool)){
-            throw new Exception('Exiftool path was not set');
+            throw new \ExifToolBatchException('Exiftool path was not set');
         }
-
-        pcntl_signal(SIGTERM,array(&$this,'sigterm'));
-        pcntl_signal(SIGCHLD,array(&$this,'sigchld'));
-
-        pcntl_sigprocmask(SIG_BLOCK,array(SIGINT));
+        
+        if($this->_pcntl_available){
+            pcntl_sigprocmask(SIG_BLOCK,array(SIGINT));
+        }
+        
         $this->_process = proc_open($this->_exiftool.' '.implode(' ',$this->_defexecargs).' -stay_open True -@ -', $descriptorspec, $this->_pipes, $cwd, $env);
-        $oldsig=array();
-        pcntl_sigprocmask(SIG_UNBLOCK, array(SIGINT), $oldsig);
+        
+        $this->_process_starttime = time();
+        
+        if($this->_pcntl_available){
+            $oldsig=array();
+            pcntl_sigprocmask(SIG_UNBLOCK, array(SIGINT), $oldsig);
+        }
 
         if(substr($this->_socket_get_mode,0,6)=="stream"){
             stream_set_blocking ($this->_pipes[1],0);
@@ -213,12 +290,13 @@ class ExifToolBatch {
             stream_set_blocking ($this->_pipes[2],$this->_socket_fgets_blocking);
         }
 
-        pcntl_signal_dispatch();
-
+        $this->pcntlDispatch();
+        
         if($this->test()){
+            $this->installIdleTimer();
             return $this->_process;
         }else{
-            throw new Exception('Exiftool did not start');
+            throw new \ExifToolBatchException('Exiftool did not start');
         }
     }
 
@@ -228,14 +306,19 @@ class ExifToolBatch {
      * @return bool True/False
      */
     public function close(){
-        @fwrite($this->_pipes[0], "-stay_open\nFalse\n");
-        @fclose($this->_pipes[0]);
-        @fclose($this->_pipes[1]);
-        @fclose($this->_pipes[2]);
-        @proc_terminate($this->_process);
-        unset($this->_pipes);
-        unset($this->_process);
-        return true;
+        if(isset($this->_pipes)){
+            fwrite($this->_pipes[0], "-stay_open\nFalse\n");
+            fclose($this->_pipes[0]);
+            fclose($this->_pipes[1]);
+            fclose($this->_pipes[2]);
+        }
+        $ret = true;
+        if(isset($this->_process)){
+            $ret = proc_close($this->_process);
+        }
+        $this->_pipes = null;
+        $this->_process = null;
+        return $ret;
     }
 
     /**
@@ -255,6 +338,8 @@ class ExifToolBatch {
      * @return array Output STDOUT/STDERR
      */
     private function run(){
+        $this->installIdleTimer();
+        
         $this->_seq = $this->_seq + 1;
         $seq=$this->_seq;
 
@@ -284,17 +369,17 @@ class ExifToolBatch {
      * Test if exiftool is alive and correct version
      *
      * @return bool True/False
-     * @throws Exception if version is not correct
+     * @throws ExifToolBatchException if version is not correct
      */
     public function test(){
         fwrite($this->_pipes[0], "-ver\n");
         $output = $this->run();
-        $output=floatval($output['STDOUT']);
+        $outputSTDOUT = floatval($output['STDOUT']);
 
         if($output>=$this->_exiftool_minver){
             return true;
         }else{
-            throw new Exception('Exiftool version ('.sprintf('%.02f',$output).') is lower than required ('.sprintf('%.02f',$this->_exiftool_minver).')');
+            throw new \ExifToolBatchException('Exiftool version ('.sprintf('%.02f',$outputSTDOUT).') is lower than required ('.sprintf('%.02f',$this->_exiftool_minver).')');
         }
     }
 
@@ -302,7 +387,15 @@ class ExifToolBatch {
      * Check if exiftool process is running
      */
     private function checkRunning(){
-        pcntl_signal_dispatch();
+        
+        $this->pcntlDispatch();
+        
+        // check total runtime of process and restart
+        if(!is_null($this->_process_starttime) && !is_null($this->_process_running_timeout) 
+                && ($this->_process_starttime + $this->_process_running_timeout) <= time()){
+            $this->close();
+        }
+        
         if(is_null($this->_process)){
             return $this->start();
         }else{
@@ -313,20 +406,25 @@ class ExifToolBatch {
             }
         }
     }
+    
+    private function pcntlDispatch()
+    {
+        if($this->_pcntl_available){
+            pcntl_signal_dispatch();
+        }
+    }
 
     /**
      * Get exiftool data from pipe
      *
      * @param int $pipe Data Pipe
      * @return str Output Data
-     * @throws Exception If child dies or out of sequence
+     * @throws ExifToolBatchException If child dies or out of sequence
      */
     private function getStreamData($pipe){
         $endstr="{ready".$this->_seq."}\n";
         $endstr_len=0-strlen($endstr);
         $timeoutStart = time();
-        $timeoutStarted = false;
-        $timeout=5;
 
         //get output data
         $output=false;
@@ -334,7 +432,8 @@ class ExifToolBatch {
         switch($this->_socket_get_mode){
             case "stream": // fast, high cpu
                 do{
-                    pcntl_signal_dispatch();
+                    $this->pcntlDispatch();
+                    if($this->_running===FALSE) break;
                     if(feof($this->_pipes[$pipe])) { $this->_chldied=true; break;}
                     $str=stream_get_line($this->_pipes[$pipe],self::BUFF_SIZE);
                     $output=$output.$str;
@@ -346,7 +445,8 @@ class ExifToolBatch {
             case "fgets": // fast, low cpu (blocking), med cpu (non-blocking)
                 if($this->_socket_fgets_blocking===true){
                     do{
-                        pcntl_signal_dispatch();
+                        $this->pcntlDispatch();
+                        if($this->_running===FALSE) break;
                         if(feof($this->_pipes[$pipe])) { $this->_chldied=true; break;}
                         $str=fgets($this->_pipes[$pipe], self::BUFF_SIZE);
                         $output=$output.$str;
@@ -354,13 +454,14 @@ class ExifToolBatch {
                 }else{
                     $timeoutStart = time();
                     while(1){
-                        pcntl_signal_dispatch();
+                        $this->pcntlDispatch();
+                        if($this->_running===FALSE) break;
                         if(feof($this->_pipes[$pipe])) { $this->_chldied=true; break;}
                         $str=fgets($this->_pipes[$pipe], self::BUFF_SIZE);
                         $output=$output.$str;
                         if(substr($output,$endstr_len)==$endstr) break;
-                        if(time() > $timeout + $timeoutStart) {
-                            throw new Exception('Reached timeout getting data');
+                        if(time() > $this->_socket_get_timeout + $timeoutStart) {
+                            throw new \ExifToolBatchException('Reached timeout getting data');
                         }
                         usleep(1000);
                     }
@@ -371,11 +472,15 @@ class ExifToolBatch {
         }
 
         if($this->_chlddied){
-            throw new Exception('ExifTool child died');
+            throw new \ExifToolBatchException('ExifTool child died',1);
+        }
+        
+        if($this->_running===FALSE){
+            throw new \ExifToolBatchException('ExifTool has terminated by SIGNAL',2);
         }
 
         if($endstr_found!=$endstr){
-            throw new Exception('ExifTool out of sequence');
+            throw new \ExifToolBatchProcessException('ExifTool out of sequence');
         }
 
         return $output;
@@ -393,11 +498,14 @@ class ExifToolBatch {
 
         $retries = 0;
         while($retries <= $this->_maxretries){
-            pcntl_signal_dispatch();
+            $this->pcntlDispatch();
             try{
                 return $this->execute_args($argsmerged);
-            }catch(Exception $e){
+            }catch(ExifToolBatchProcessException $e){
                 $retries++;
+            }catch(ExifToolBatchException $e){
+                $this->close();
+                throw $e;
             }
         }
     }
@@ -409,6 +517,7 @@ class ExifToolBatch {
      * @return array Output STDOUT/STDERR
      */
     private function execute_args($args){
+        $this->_processing = true;
         $this->checkRunning();
 
         foreach($args as $arg){
@@ -417,7 +526,11 @@ class ExifToolBatch {
         }
 
         // get all of the output
-        return $this->run();
+        $ret = $this->run();
+        
+        $this->_processing = false;
+        
+        return $ret;
     }
 
     /**
@@ -430,7 +543,7 @@ class ExifToolBatch {
         if(is_array($data)){
             $dataArr=array();
             foreach($data as $data2){
-                if($data3 = json_decode($data2)){
+                if(($data3 = json_decode($data2)) == TRUE){
                     if(is_array($data3)){
                         foreach($data3 as $x){
                             $dataArr[]=$x;
@@ -440,7 +553,7 @@ class ExifToolBatch {
             }
             return $dataArr;
         }else{
-            if($data=json_decode($data)){
+            if(($data = json_decode($data)) == TRUE){
                 return $data;
             }else{
                 return false;
@@ -531,8 +644,7 @@ class ExifToolBatch {
         if(!$lasterr || empty($lasterr)) return $data;
 
         $lasterr_arr = explode("\n",$lasterr);
-
-        $errorTags = array("Warning","Error");
+        
         foreach($lasterr_arr as $k=>$v){
             if(empty($v)) continue;
             if(substr($v,0,8) == "Warning:"){
@@ -554,11 +666,12 @@ class ExifToolBatch {
     /**
      * Fetch one item from stack and decode
      *
+     * @param bool $assoc JSON Object/Array
      * @return mixed Data/False
      */
-    public function fetchDecoded(){
+    public function fetchDecoded($assoc=false){
         if(!$this->fetch()) return false;
-        if($data=json_decode($this->_lastdata)){
+        if(($data=json_decode($this->_lastdata,$assoc)) == TRUE){
             return $data;
         }else{
             return false;
@@ -583,15 +696,29 @@ class ExifToolBatch {
     }
 
     /**
+     * Fetch one item from stack and pass to callback
+     *
+     * @param object $callback User Callback
+     * @return mixed Data/False
+     */
+    public function fetchCallback($callback){
+        if(!is_callable($callback))
+            throw new \ExifToolBatchException('Callback passed is not callable');
+        if(!$this->fetch()) return false;
+        return call_user_func_array($callback,array('data'=>$this->_lastdata,'error'=>$this->_lasterr));
+    }
+
+    /**
      * Fetch all items from stack and decode
      *
+     * @param bool $assoc JSON Object/Array
      * @return array All Data
      */
-    public function fetchAllDecoded(){
+    public function fetchAllDecoded($assoc=false){
         if(!$this->fetchAll()) return false;
         $dataArr=array();
         foreach($this->_lastdata as $lastdata){
-            if($data = json_decode($lastdata)){
+            if(($data = json_decode($lastdata,$assoc)) == TRUE){
                 if(is_array($data)){
                     foreach($data as $x){
                         $dataArr[]=$x;
@@ -622,7 +749,19 @@ class ExifToolBatch {
         return $data;
     }
 
-
+    /**
+     * Fetch all items from stack and pass to callback
+     *
+     * @param object $callback User Callback
+     * @return mixed Data/False
+     */
+    public function fetchAllCallback($callback){
+        if(!is_callable($callback))
+            throw new \ExifToolBatchException('Callback passed is not callable');
+        if(!$this->fetchAll()) return false;
+        return call_user_func_array($callback,array('data'=>$this->_lastdata,'error'=>$this->_lasterr));
+    }
+    
     /**
      * Add single job of arguments to stack
      *
