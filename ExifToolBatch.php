@@ -235,11 +235,11 @@ class ExifToolBatch {
      */
     private function installSignals(){
         if(!$this->_pcntl_available) return;
-	pcntl_signal(SIGTERM, [$this,'signal']);
-        pcntl_signal(SIGINT,  [$this,'signal']);
-        pcntl_signal(SIGTRAP, [$this,'signal']);
-        pcntl_signal(SIGHUP,  [$this,'signal']);
-        pcntl_signal(SIGALRM,  [$this,'signal']);
+	pcntl_signal(SIGTERM, array($this,'signal'));
+        pcntl_signal(SIGINT,  array($this,'signal'));
+        pcntl_signal(SIGTRAP, array($this,'signal'));
+        pcntl_signal(SIGHUP,  array($this,'signal'));
+        pcntl_signal(SIGALRM,  array($this,'signal'));
     }
     
     /**
