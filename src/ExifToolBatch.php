@@ -1,11 +1,10 @@
 <?php
 # vim: set smartindent tabstop=4 shiftwidth=4 set expandtab
+namespace Exiftool;
 
-class ExifToolBatchProcessException extends ExifToolBatchException {
-}
-
-class ExifToolBatchException extends Exception {
-}
+use Exception;
+use Exiftool\Exceptions\ExifToolBatchException;
+use Exiftool\Exceptions\ExifToolBatchProcessException;
 
 class ExifToolBatch {
 
@@ -169,12 +168,12 @@ class ExifToolBatch {
     /**
      * Set process idle timeout
      * @param int $timeout Timeout in seconds
-     * @return \ExifToolBatch
-     * @throws \ExifToolBatchException
+     * @return ExifToolBatch
+     * @throws ExifToolBatchException
      */
     public function setIdleTimeout($timeout){
         if(!is_null($timeout) && !is_int($timeout))
-            throw new \ExifToolBatchException('Timeout has to be integer');
+            throw new ExifToolBatchException('Timeout has to be integer');
         $this->_process_idle_timeout = $timeout;
         return $this;
     }
@@ -182,12 +181,12 @@ class ExifToolBatch {
     /**
      * Set total process runtime timeout
      * @param int $timeout Timeout in seconds
-     * @return \ExifToolBatch
-     * @throws \ExifToolBatchException
+     * @return ExifToolBatch
+     * @throws ExifToolBatchException
      */
     public function setProcessTimeout($timeout){
         if(!is_null($timeout) && !is_int($timeout))
-            throw new \ExifToolBatchException('Timeout has to be integer');
+            throw new ExifToolBatchException('Timeout has to be integer');
         $this->_process_running_timeout = $timeout;
         return $this;
     }
@@ -216,7 +215,7 @@ class ExifToolBatch {
                     $this->_chlddied=true;
                     break;
             case SIGTRAP:
-                    $e = new \ExifToolBatchException;
+                    $e = new ExifToolBatchException;
                     file_put_contents(sys_get_temp_dir().'/pm_backtrace_'.getmypid(),
                             $e->getTraceAsString());
                     break;
@@ -266,7 +265,7 @@ class ExifToolBatch {
         );
 
         if(is_null($this->_exiftool)){
-            throw new \ExifToolBatchException('Exiftool path was not set');
+            throw new ExifToolBatchException('Exiftool path was not set');
         }
         
         if($this->_pcntl_available){
@@ -296,7 +295,7 @@ class ExifToolBatch {
             $this->installIdleTimer();
             return $this->_process;
         }else{
-            throw new \ExifToolBatchException('Exiftool did not start');
+            throw new ExifToolBatchException('Exiftool did not start');
         }
     }
 
@@ -379,7 +378,7 @@ class ExifToolBatch {
         if($output>=$this->_exiftool_minver){
             return true;
         }else{
-            throw new \ExifToolBatchException('Exiftool version ('.sprintf('%.02f',$outputSTDOUT).') is lower than required ('.sprintf('%.02f',$this->_exiftool_minver).')');
+            throw new ExifToolBatchException('Exiftool version ('.sprintf('%.02f',$outputSTDOUT).') is lower than required ('.sprintf('%.02f',$this->_exiftool_minver).')');
         }
     }
 
@@ -461,7 +460,7 @@ class ExifToolBatch {
                         $output=$output.$str;
                         if(substr($output,$endstr_len)==$endstr) break;
                         if(time() > $this->_socket_get_timeout + $timeoutStart) {
-                            throw new \ExifToolBatchException('Reached timeout getting data');
+                            throw new ExifToolBatchException('Reached timeout getting data');
                         }
                         usleep(1000);
                     }
@@ -472,15 +471,15 @@ class ExifToolBatch {
         }
 
         if($this->_chlddied){
-            throw new \ExifToolBatchException('ExifTool child died',1);
+            throw new ExifToolBatchException('ExifTool child died',1);
         }
         
         if($this->_running===FALSE){
-            throw new \ExifToolBatchException('ExifTool has terminated by SIGNAL',2);
+            throw new ExifToolBatchException('ExifTool has terminated by SIGNAL',2);
         }
 
         if($endstr_found!=$endstr){
-            throw new \ExifToolBatchProcessException('ExifTool out of sequence');
+            throw new ExifToolBatchProcessException('ExifTool out of sequence');
         }
 
         return $output;
@@ -671,7 +670,7 @@ class ExifToolBatch {
      */
     public function fetchDecoded($assoc=false){
     	if(!in_array('-j', $this->_defargs))
-            throw new \ExifToolBatchException('Missing exiftool json argument');
+            throw new ExifToolBatchException('Missing exiftool json argument');
         if(!$this->fetch()) return false;
         if(($data=json_decode($this->_lastdata,$assoc)) == TRUE){
             return $data;
@@ -705,7 +704,7 @@ class ExifToolBatch {
      */
     public function fetchCallback($callback){
         if(!is_callable($callback))
-            throw new \ExifToolBatchException('Callback passed is not callable');
+            throw new ExifToolBatchException('Callback passed is not callable');
         if(!$this->fetch()) return false;
         return call_user_func_array($callback,array('data'=>$this->_lastdata,'error'=>$this->_lasterr));
     }
@@ -718,7 +717,7 @@ class ExifToolBatch {
      */
     public function fetchAllDecoded($assoc=false){
     	if(!in_array('-j', $this->_defargs))
-            throw new \ExifToolBatchException('Missing exiftool json argument');
+            throw new ExifToolBatchException('Missing exiftool json argument');
         if(!$this->fetchAll()) return false;
         $dataArr=array();
         foreach($this->_lastdata as $lastdata){
@@ -761,7 +760,7 @@ class ExifToolBatch {
      */
     public function fetchAllCallback($callback){
         if(!is_callable($callback))
-            throw new \ExifToolBatchException('Callback passed is not callable');
+            throw new ExifToolBatchException('Callback passed is not callable');
         if(!$this->fetchAll()) return false;
         return call_user_func_array($callback,array('data'=>$this->_lastdata,'error'=>$this->_lasterr));
     }

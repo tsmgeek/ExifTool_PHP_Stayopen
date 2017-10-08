@@ -1,7 +1,5 @@
 <?php
 
-include_once('ExifToolBatch.php');
-
 // Create our worker object.
 $gmworker= new GearmanWorker();
 
@@ -25,7 +23,7 @@ while($gmworker->work())
 
 function exiftool($job){
     $data = unserialize($job->workload());
-    $exif = ExifToolBatch::getInstance('/usr/local/exif/exiftool');
+    $exif = \Exiftool\ExifToolBatch::getInstance('/usr/local/exif/exiftool');
     print "-";
     $exif->add($data);
     $x=$exif->fetch();

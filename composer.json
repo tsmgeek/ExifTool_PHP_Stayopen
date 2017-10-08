@@ -8,8 +8,11 @@
     "meta-data"
   ],
   "require": {
-    "php": "^5.3",
+    "php": ">=5.3",
     "ext-pcntl": "*"
+  },
+  "autoload": {
+    "psr-4": { "Exiftool\\": "src/" }
   },
   "support": {
     "docs": "https://www.sno.phy.queensu.ca/~phil/exiftool/faq.html"
