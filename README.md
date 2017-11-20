@@ -19,7 +19,7 @@ Phil Harvey's Exiftool  (Forum Dev Post) - http://u88.n24.queensu.ca/exiftool/fo
 
 Performance tests
 -
-These figures are to be taken as a guide of performance increase possible with supplied scripts but will vary depending on your hardware setup and arguments supplied to ExifTool.
+These figures are to be taken as a guide of performance increase possible with supplied scripts but will vary depending on your hardware setup and arguments supplied to ExifTool (test system was running on ESXi/Opteron 2435/4vCPU/2G)
 
 100 iterations fetching metadata from a JPEG (-use MWG -g -j -all:all)<br/>
 1 GM Instance - 1.3s<br/>
@@ -39,17 +39,21 @@ Put all your commands in an array and push it into the stack using the `$exif->a
 
 `getInstance()` setup class as a singleton<br/>
 `setExifToolPath($path)` set/change the path of ExifTool if not supplied at start<br/>
+`setIdleTimeout($timeout)` idle seconds until ExifTool process is terminated<br/> 
+`setProcessTimeout($timeout)` total ExifTool running seconds until process is terminated<br/>
 `close()` terminate ExifTool background process<br/>
 `start()` start ExifTool background process<br/>
 `test()` to check if ExifTool is running.<br/>
 `clear()` clear the stack<br/>
 `fetch()` will return one processed item off the stack at a time.<br/>
 `fetchAll()` will return a single array with all items in the stack processed.<br/>
+`fetchDecoded($assoc)` will return one processed item off the stack at a time with JSON output decoded.<br/>
+`fetchAllDecoded($assoc)` will return a single array with all items in the stack processed and JSON output decoded.<br/>
+`fetchCallback($callback)` will return one processed item via user callback off the stack at a time .<br/>
+`fetchAllCallback($callback)` will return a single array with all items in the stack processed after processing via user callback.<br/>
 `getError($id)` will return FALSE or STDERR output if there was an error, pass index if `fetchAll()` was used<br/>
 `getErrorStr($id)` will return STDERR output, pass index if `fetchAll()` was used<br/>
 `getSummary(msg)` will return summary value from msg passed which are defined as const's<br/>
-
-There are also calls to `fetchDecoded()`/`fetchAllDecoded()` which essentialy will decode the output in one step if your default arguments contains '-j' JSON output, the default for the script is ('-g','-j') to assist in this.
 
 As you fetch items they are taken off the stack.
 
@@ -57,7 +61,7 @@ Examples
 ---
 Simple request to get all image metadata
 ```php
-$data=array('-g','-j','-*:*','test1.jpg');
+$data=array('-*:*','test1.jpg');
 $exif = ExifToolBatch::getInstance(/path/to/exiftool');
 $exif->add($data);
 $result=$exif->fetchAll();
